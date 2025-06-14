@@ -40,7 +40,7 @@ def schedule_send(chat_id, text, scheduled_time):
 def send_text():
     try:
         text = request.form['text']
-        scheduled_time = request.form['scheduled_time']  # "2025-06-15 13:00"
+        scheduled_time = request.form['scheduled_time']  # "2025-06-15 14:10"
         chat_id = CHANNEL_USERNAME
         dt = datetime.strptime(scheduled_time, "%Y-%m-%d %H:%M")
         schedule_send(chat_id, text, dt)
