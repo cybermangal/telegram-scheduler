@@ -5,6 +5,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 import json
 from datetime import datetime
+import traceback
 
 app = Flask(__name__)
 
@@ -18,11 +19,14 @@ scheduler = BackgroundScheduler()
 scheduler.start()
 
 async def send_audio_async(chat_id, file_path, track_name, performer, links):
-    keyboard = [[
-        InlineKeyboardButton("Паблик", url="https://vk.com/ic_beatz"),
-        InlineKeyboardButton("Сайт", url=links[0]),
-        InlineKeyboardButton("Beatchain", url=links[1])
-    ]]
+    print(f"[LOG] Старт отправки: {file_path}, {track_name}, {performer}, {links}")
+    keyboard = [
+        [
+            InlineKeyboardButton("Паблик", url="https://vk.com/ic_beatz"),
+            InlineKeyboardButton("Сайт", url=links[0]),
+            InlineKeyboardButton("Beatchain", url=links[1])
+        ]
+    ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     with open(file_path, "rb") as audio_file:
         await bot.send_audio(
@@ -32,11 +36,17 @@ async def send_audio_async(chat_id, file_path, track_name, performer, links):
             performer=performer,
             reply_markup=reply_markup
         )
-    print(f"[LOG] Отправлен: {file_path}")
+    print(f"[LOG] Успешно отправлено: {track_name}")
 
 def schedule_send(chat_id, file_path, track_name, performer, links, scheduled_time):
     def callback():
-        asyncio.run(send_audio_async(chat_id, file_path, track_name, performer, links))
+        try:
+            print(f"[LOG] Вызван callback для {track_name} на {scheduled_time}")
+            asyncio.run(send_audio_async(chat_id, file_path, track_name, performer, links))
+        except Exception as e:
+            print("=== ERROR in callback ===")
+            print(f"Exception: {e}")
+            traceback.print_exc()
     scheduler.add_job(
         callback,
         trigger='date',
@@ -46,18 +56,25 @@ def schedule_send(chat_id, file_path, track_name, performer, links, scheduled_ti
 
 @app.route("/send_post", methods=["POST"])
 def send_post():
-    audio = request.files['audio']
-    track_name = request.form['track_name']
-    performer = request.form['performer']
-    links = json.loads(request.form['links'])
-    scheduled_time = request.form['scheduled_time']  # "2024-06-11 23:59"
-    chat_id = CHANNEL_USERNAME
+    try:
+        audio = request.files['audio']
+        track_name = request.form['track_name']
+        performer = request.form['performer']
+        links = json.loads(request.form['links'])
+        scheduled_time = request.form['scheduled_time']  # "2024-06-15 18:30"
+        chat_id = CHANNEL_USERNAME
 
-    file_path = os.path.join(UPLOAD_FOLDER, audio.filename)
-    audio.save(file_path)
-    dt = datetime.strptime(scheduled_time, "%Y-%m-%d %H:%M")
-    schedule_send(chat_id, file_path, track_name, performer, links, dt)
-    return "OK"
+        file_path = os.path.join(UPLOAD_FOLDER, audio.filename)
+        audio.save(file_path)
+        dt = datetime.strptime(scheduled_time, "%Y-%m-%d %H:%M")
+        schedule_send(chat_id, file_path, track_name, performer, links, dt)
+        print(f"[LOG] Принят файл {audio.filename} для {track_name}")
+        return "OK"
+    except Exception as e:
+        print("=== ERROR in /send_post ===")
+        print(f"Exception: {e}")
+        traceback.print_exc()
+        return f"ERROR: {e}", 500
 
 @app.route("/", methods=["GET"])
 def hello():
