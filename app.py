@@ -1,11 +1,12 @@
 import os
 import asyncio
-from flask import Flask, request
+from flask import Flask, request, jsonify
 from apscheduler.schedulers.background import BackgroundScheduler
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 import json
 from datetime import datetime
 import traceback
+import threading
 
 app = Flask(__name__)
 
@@ -18,7 +19,13 @@ bot = Bot(BOT_TOKEN)
 scheduler = BackgroundScheduler()
 scheduler.start()
 
-async def send_audio_async(chat_id, file_path, track_name, performer, links):
+loop = asyncio.new_event_loop()  # Важно: создаём отдельный loop!
+threading.Thread(target=loop.run_forever, daemon=True).start()
+
+# Для хранения info о задачах
+scheduled_tasks = {}
+
+async def send_audio_async(chat_id, file_path, track_name, performer, links, job_id):
     print(f"[LOG] Попытка отправки mp3: {file_path}, {track_name}, {performer}, {links}")
     keyboard = [
         [
@@ -37,12 +44,23 @@ async def send_audio_async(chat_id, file_path, track_name, performer, links):
             reply_markup=reply_markup
         )
     print(f"[LOG] mp3 отправлен: {track_name}")
+    # После успешной отправки удаляем таску из списка
+    if job_id in scheduled_tasks:
+        del scheduled_tasks[job_id]
+    try:
+        os.remove(file_path)
+        print(f"[LOG] mp3 файл удалён: {file_path}")
+    except Exception:
+        pass
 
 def schedule_send(chat_id, file_path, track_name, performer, links, scheduled_time):
+    job_id = f"{track_name}_{scheduled_time.timestamp()}"
     def callback():
         try:
             print(f"[LOG] Вызван callback для mp3 '{track_name}' на {scheduled_time}")
-            asyncio.run(send_audio_async(chat_id, file_path, track_name, performer, links))
+            fut = asyncio.run_coroutine_threadsafe(
+                send_audio_async(chat_id, file_path, track_name, performer, links, job_id), loop
+            )
         except Exception as e:
             print("=== ERROR in callback ===")
             print(f"Exception: {e}")
@@ -51,8 +69,18 @@ def schedule_send(chat_id, file_path, track_name, performer, links, scheduled_ti
     scheduler.add_job(
         callback,
         trigger='date',
-        run_date=scheduled_time
+        run_date=scheduled_time,
+        id=job_id,
+        replace_existing=True
     )
+    scheduled_tasks[job_id] = {
+        "track_name": track_name,
+        "performer": performer,
+        "links": links,
+        "file_path": file_path,
+        "run_time": scheduled_time.strftime("%Y-%m-%d %H:%M"),
+        "job_id": job_id
+    }
     print(f"[LOG] Задача добавлена: '{track_name}' на {scheduled_time}")
 
 @app.route("/send_mp3", methods=["POST"])
@@ -65,7 +93,7 @@ def send_mp3():
         track_name = request.form['track_name']
         performer = request.form['performer']
         links = json.loads(request.form['links'])
-        scheduled_time = request.form['scheduled_time']  # "2025-06-15 15:30"
+        scheduled_time = request.form['scheduled_time']
         chat_id = CHANNEL_USERNAME
 
         file_path = os.path.join(UPLOAD_FOLDER, audio.filename)
@@ -79,6 +107,28 @@ def send_mp3():
         print(f"Exception: {e}")
         traceback.print_exc()
         return f"ERROR: {e}", 500
+
+@app.route("/tasks", methods=["GET"])
+def list_tasks():
+    # Возвращает список всех текущих задач
+    return jsonify(list(scheduled_tasks.values()))
+
+@app.route("/clear_tasks", methods=["POST"])
+def clear_tasks():
+    print("[LOG] Очистка всех задач!")
+    for job_id in list(scheduled_tasks.keys()):
+        try:
+            scheduler.remove_job(job_id)
+        except Exception:
+            pass
+        del scheduled_tasks[job_id]
+    # Почистим папку uploads
+    for f in os.listdir(UPLOAD_FOLDER):
+        try:
+            os.remove(os.path.join(UPLOAD_FOLDER, f))
+        except Exception:
+            pass
+    return "CLEARED"
 
 @app.route("/", methods=["GET"])
 def hello():
