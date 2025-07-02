@@ -1,16 +1,12 @@
 import os
 import asyncio
-<<<<<<< HEAD
 import threading
-=======
->>>>>>> 805c0bbecf49e72affdd87d00beddb9ed6cf2445
 from flask import Flask, request, jsonify
 from apscheduler.schedulers.background import BackgroundScheduler
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 import json
 from datetime import datetime
 import traceback
-import threading
 
 from tasks_storage import load_all_tasks, add_task, remove_task, clear_all_tasks
 
@@ -25,17 +21,10 @@ bot = Bot(BOT_TOKEN)
 scheduler = BackgroundScheduler()
 scheduler.start()
 
-<<<<<<< HEAD
 loop = asyncio.new_event_loop()
 threading.Thread(target=loop.run_forever, daemon=True).start()
 
 # Для хранения info о текущих тасках в памяти
-=======
-loop = asyncio.new_event_loop()  # Важно: создаём отдельный loop!
-threading.Thread(target=loop.run_forever, daemon=True).start()
-
-# Для хранения info о задачах
->>>>>>> 805c0bbecf49e72affdd87d00beddb9ed6cf2445
 scheduled_tasks = {}
 
 async def send_audio_async(chat_id, file_path, track_name, performer, links, job_id):
@@ -57,27 +46,17 @@ async def send_audio_async(chat_id, file_path, track_name, performer, links, job
             reply_markup=reply_markup
         )
     print(f"[LOG] mp3 отправлен: {track_name}")
-<<<<<<< HEAD
     # После успешной отправки удаляем таску
     if job_id in scheduled_tasks:
         del scheduled_tasks[job_id]
     remove_task(job_id)
-=======
-    # После успешной отправки удаляем таску из списка
-    if job_id in scheduled_tasks:
-        del scheduled_tasks[job_id]
->>>>>>> 805c0bbecf49e72affdd87d00beddb9ed6cf2445
     try:
         os.remove(file_path)
         print(f"[LOG] mp3 файл удалён: {file_path}")
     except Exception:
         pass
 
-<<<<<<< HEAD
 def schedule_send(chat_id, file_path, track_name, performer, links, scheduled_time, save_to_file=True):
-=======
-def schedule_send(chat_id, file_path, track_name, performer, links, scheduled_time):
->>>>>>> 805c0bbecf49e72affdd87d00beddb9ed6cf2445
     job_id = f"{track_name}_{scheduled_time.timestamp()}"
     def callback():
         try:
@@ -103,16 +82,11 @@ def schedule_send(chat_id, file_path, track_name, performer, links, scheduled_ti
         "links": links,
         "file_path": file_path,
         "run_time": scheduled_time.strftime("%Y-%m-%d %H:%M"),
-<<<<<<< HEAD
         "job_id": job_id,
         "chat_id": chat_id
     }
     if save_to_file:
         add_task(scheduled_tasks[job_id])
-=======
-        "job_id": job_id
-    }
->>>>>>> 805c0bbecf49e72affdd87d00beddb9ed6cf2445
     print(f"[LOG] Задача добавлена: '{track_name}' на {scheduled_time}")
 
 @app.route("/send_mp3", methods=["POST"])
@@ -131,11 +105,7 @@ def send_mp3():
         file_path = os.path.join(UPLOAD_FOLDER, audio.filename)
         audio.save(file_path)
         dt = datetime.strptime(scheduled_time, "%Y-%m-%d %H:%M")
-<<<<<<< HEAD
         schedule_send(chat_id, file_path, track_name, performer, links, dt, save_to_file=True)
-=======
-        schedule_send(chat_id, file_path, track_name, performer, links, dt)
->>>>>>> 805c0bbecf49e72affdd87d00beddb9ed6cf2445
         print(f"[LOG] Принят mp3 {audio.filename} для '{track_name}' на {dt}")
         return "OK"
     except Exception as e:
@@ -147,18 +117,11 @@ def send_mp3():
 @app.route("/tasks", methods=["GET"])
 def list_tasks():
     # Возвращает список всех текущих задач
-<<<<<<< HEAD
     tasks = load_all_tasks()
     return jsonify(tasks)
 
 @app.route("/clear_tasks", methods=["POST"])
 def clear_tasks_api():
-=======
-    return jsonify(list(scheduled_tasks.values()))
-
-@app.route("/clear_tasks", methods=["POST"])
-def clear_tasks():
->>>>>>> 805c0bbecf49e72affdd87d00beddb9ed6cf2445
     print("[LOG] Очистка всех задач!")
     for job_id in list(scheduled_tasks.keys()):
         try:
@@ -172,10 +135,7 @@ def clear_tasks():
             os.remove(os.path.join(UPLOAD_FOLDER, f))
         except Exception:
             pass
-<<<<<<< HEAD
     clear_all_tasks()
-=======
->>>>>>> 805c0bbecf49e72affdd87d00beddb9ed6cf2445
     return "CLEARED"
 
 @app.route("/", methods=["GET"])
