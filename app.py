@@ -5,7 +5,7 @@ from flask import Flask, request, jsonify
 from apscheduler.schedulers.background import BackgroundScheduler
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 import traceback
 
 from tasks_storage import load_all_tasks, add_task, remove_task, clear_all_tasks
@@ -74,7 +74,8 @@ def schedule_send(chat_id, file_path, track_name, performer, links, scheduled_ti
         trigger='date',
         run_date=scheduled_time,
         id=job_id,
-        replace_existing=True
+        replace_existing=True,
+        misfire_grace_time=3600  # <-- Валидна в течение часа!
     )
     scheduled_tasks[job_id] = {
         "track_name": track_name,
@@ -147,9 +148,11 @@ def restore_all_tasks_on_start():
     print("[LOG] Восстановление задач из файла...")
     tasks = load_all_tasks()
     now = datetime.utcnow()
+    restored = 0
     for t in tasks:
         run_time = datetime.strptime(t["run_time"], "%Y-%m-%d %H:%M")
-        if run_time > now:
+        # Восстанавливаем все задачи, которые не старше 1 часа
+        if run_time > now - timedelta(hours=1):
             schedule_send(
                 t.get("chat_id", CHANNEL_USERNAME),
                 t["file_path"],
@@ -159,7 +162,8 @@ def restore_all_tasks_on_start():
                 run_time,
                 save_to_file=False  # Чтобы не дублировать таск в файле!
             )
-    print(f"[LOG] Восстановлено задач: {len(tasks)}")
+            restored += 1
+    print(f"[LOG] Восстановлено задач: {restored}")
 
 if __name__ == '__main__':
     print("[LOG] Запуск Flask приложения...")
