@@ -24,7 +24,6 @@ scheduler.start()
 loop = asyncio.new_event_loop()
 threading.Thread(target=loop.run_forever, daemon=True).start()
 
-# Для хранения info о текущих тасках в памяти
 scheduled_tasks = {}
 
 async def send_audio_async(chat_id, file_path, track_name, performer, links, job_id):
@@ -46,7 +45,6 @@ async def send_audio_async(chat_id, file_path, track_name, performer, links, job
             reply_markup=reply_markup
         )
     print(f"[LOG] mp3 отправлен: {track_name}")
-    # После успешной отправки удаляем таску
     if job_id in scheduled_tasks:
         del scheduled_tasks[job_id]
     remove_task(job_id)
@@ -75,7 +73,7 @@ def schedule_send(chat_id, file_path, track_name, performer, links, scheduled_ti
         run_date=scheduled_time,
         id=job_id,
         replace_existing=True,
-        misfire_grace_time=3600  # <-- Валидна в течение часа!
+        misfire_grace_time=3600  # Валидна в течение часа
     )
     scheduled_tasks[job_id] = {
         "track_name": track_name,
@@ -117,7 +115,6 @@ def send_mp3():
 
 @app.route("/tasks", methods=["GET"])
 def list_tasks():
-    # Возвращает список всех текущих задач
     tasks = load_all_tasks()
     return jsonify(tasks)
 
@@ -130,7 +127,6 @@ def clear_tasks_api():
         except Exception:
             pass
         del scheduled_tasks[job_id]
-    # Почистим папку uploads
     for f in os.listdir(UPLOAD_FOLDER):
         try:
             os.remove(os.path.join(UPLOAD_FOLDER, f))
@@ -145,13 +141,12 @@ def hello():
     return "Telegram Scheduler работает!"
 
 def restore_all_tasks_on_start():
-    print("[LOG] Восстановление задач из файла...")
+    print("[LOG] Восстановление задач из базы MongoDB...")
     tasks = load_all_tasks()
     now = datetime.utcnow()
     restored = 0
     for t in tasks:
         run_time = datetime.strptime(t["run_time"], "%Y-%m-%d %H:%M")
-        # Восстанавливаем все задачи, которые не старше 1 часа
         if run_time > now - timedelta(hours=1):
             schedule_send(
                 t.get("chat_id", CHANNEL_USERNAME),
@@ -160,7 +155,7 @@ def restore_all_tasks_on_start():
                 t["performer"],
                 t["links"],
                 run_time,
-                save_to_file=False  # Чтобы не дублировать таск в файле!
+                save_to_file=False
             )
             restored += 1
     print(f"[LOG] Восстановлено задач: {restored}")
