@@ -1,30 +1,27 @@
-import json
 import os
+from pymongo import MongoClient
 
-TASKS_FILE = "scheduled_tasks.json"
+MONGO_URL = os.environ.get("MONGO_URL")
+DB_NAME = os.environ.get("MONGO_DB", "telegram_scheduler")
+
+client = MongoClient(MONGO_URL)
+db = client[DB_NAME]
+tasks_collection = db["scheduled_tasks"]
 
 def load_all_tasks():
-    if not os.path.exists(TASKS_FILE):
-        return []
-    with open(TASKS_FILE, "r", encoding="utf-8") as f:
-        try:
-            return json.load(f)
-        except Exception:
-            return []
+    tasks = list(tasks_collection.find({}, {"_id": 0}))
+    return tasks
 
 def save_all_tasks(tasks):
-    with open(TASKS_FILE, "w", encoding="utf-8") as f:
-        json.dump(tasks, f, ensure_ascii=False, indent=2)
+    tasks_collection.delete_many({})
+    if tasks:
+        tasks_collection.insert_many(tasks)
 
 def add_task(task):
-    tasks = load_all_tasks()
-    tasks.append(task)
-    save_all_tasks(tasks)
+    tasks_collection.insert_one(task)
 
 def remove_task(job_id):
-    tasks = load_all_tasks()
-    tasks = [t for t in tasks if t["job_id"] != job_id]
-    save_all_tasks(tasks)
+    tasks_collection.delete_many({"job_id": job_id})
 
 def clear_all_tasks():
-    save_all_tasks([])
+    tasks_collection.delete_many({})
